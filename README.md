@@ -6,13 +6,22 @@ A full-stack web application for exploring and visualizing baseball player stati
 
 ```
 ├── backend/                 # Python Flask API
-│   ├── main.py              # Main Flask application
-│   ├── schemas.py           # Data validation schemas
+│   ├── main.py              # Entry point (creates the app via factory)
+│   ├── app/
+│   │   ├── __init__.py      # App factory, blueprint registration, error handlers
+│   │   ├── extensions.py    # Shared Flask extensions (SQLAlchemy)
+│   │   ├── models.py        # SQLAlchemy models
+│   │   ├── schemas.py       # Marshmallow response + query-validation schemas
+│   │   └── routes/
+│   │       ├── __init__.py  # Shared helpers (query validation, pagination)
+│   │       ├── players.py   # /api/players endpoints + arsenal summary
+│   │       └── pitches.py   # /api/pitches endpoints
 │   ├── data/
 │   │   ├── baseball.db      # SQLite Database with players and pitches table
 │   │   ├── players.csv      # Player data that is already ingested into the players table
 │   │   ├── pitches.csv      # Pitch data sample from the 2025 MLB postseason that is already ingested into the pitches table
 │   ├── tests/
+│   │   ├── conftest.py      # Seeded in-memory DB fixtures
 │   │   ├── test_api.py      # API tests
 │   │   └── __init__.py
 │   ├── requirements.txt     # Python dependencies
@@ -22,6 +31,10 @@ A full-stack web application for exploring and visualizing baseball player stati
 │   │   └── index.html
 │   ├── src/
 │   │   ├── components/      # React components
+│   │   │   ├── ArsenalPanel.tsx
+│   │   │   ├── Pagination.tsx
+│   │   │   ├── PitchFilterControls.tsx
+│   │   │   ├── PitchTable.tsx
 │   │   │   ├── PlayerFilterControls.tsx
 │   │   │   ├── PlayerTable.tsx
 │   │   │   └── __tests__/   # Component tests
@@ -29,14 +42,15 @@ A full-stack web application for exploring and visualizing baseball player stati
 │   │   │   └── api.ts
 │   │   ├── types/           # TypeScript type definitions
 │   │   │   └── index.ts
-│   │   ├── App.tsx          # Main App component
+│   │   ├── App.tsx          # Main App component (Players/Pitches tabs)
 │   │   ├── App.css          # Styles
 │   │   ├── index.css        # Global styles
 │   │   ├── index.tsx        # Entry point
 │   │   └── App.test.tsx     # Component tests
 │   ├── package.json
 │   ├── tsconfig.json
-├── QUESIONS.md              # Development practices questions
+├── .github/workflows/ci.yml # CI: pytest, tsc, vitest on push/PR
+├── QUESTIONS.md             # Development practices questions
 ├── .gitignore               # Git ignore patterns
 ├── START_HERE.md            # Assessment introduction
 └── README.md                # This file
@@ -167,13 +181,52 @@ npm test # if using the dev container this will be 'bun test' instead
 
 ## Features
 
-Update this README to note the features you completed as a part of your submission. If you would like to explain your thought process or progress further, feel free to include an additional markdown file.
-
 ### Completed
 
-- [ ] REST API for player and pitch data access
-- [ ] Player and pitch data table with filtering
-- [ ] Unit/integration tests
+- [x] REST API for player and pitch data access
+  - `GET /api/players` — team, position, and name-search filters with pagination
+  - `GET /api/players/<id>` — single player with 404 handling
+  - `GET /api/players/teams` and `/api/players/positions` — filter dropdown data
+  - `GET /api/players/<id>/arsenal` — pitch mix summary: usage %, avg/max velocity, avg spin per pitch type
+  - `GET /api/pitches` — filters for pitcher, batter, player (thrown *or* seen), pitch type, team, velocity range, and date range, with pagination
+  - `GET /api/pitches/types` — pitch type codes and display names
+  - Query-parameter validation via marshmallow (bad input → 400 with field-level messages)
+  - Consistent response envelope: `{ data: [...], pagination: { page, per_page, total, total_pages } }`
+- [x] Player and pitch data tables with filtering
+  - Tabbed UI (Players / Pitches) with debounced name search and pagination controls
+  - Loading, error, and empty states on both tables
+  - Click a player row to open their pitch arsenal panel
+- [x] Unit/integration tests
+  - Backend: 29 pytest tests against a seeded in-memory SQLite DB (fixtures deliberately store numerics as strings to mirror the real TEXT columns, including a blank-velocity row)
+  - Frontend: 11 vitest/Testing Library tests with a mocked API layer
+- [x] CI: GitHub Actions workflow running pytest, tsc, and vitest on every push/PR
+
+### Answering the assessment's example questions
+
+| Question | How |
+|---|---|
+| What pitches did player X throw? | `/api/pitches?pitcher=<id>` or the arsenal panel |
+| What pitches did player X see? | `/api/pitches?batter=<id>` |
+| How many pitches did X throw or see? | `pagination.total` on `/api/pitches?player_id=<id>` |
+| What pitches were thrown at ≥95 mph? | `/api/pitches?min_velocity=95` (4,418 in this dataset) |
+| What players were on team X? | `/api/players?team=<code>` |
+
+### Notes, findings, and trade-offs
+
+- **TEXT columns in the pitches table.** Every column in the shipped `pitches` table is TEXT (raw CSV ingest). SQLite orders any TEXT above any number, so a naive `release_speed >= 95` filter silently returns wrong rows. Velocity filters and arsenal aggregates `CAST(... AS REAL)` at query time, and the serialization layer coerces values so the API emits real JSON numbers (blank values become `null`). The long-term fix is re-ingesting with typed columns plus indexes on `pitcher`, `batter`, and `game_date` — done as expand-and-contract, that's a zero-downtime migration.
+- **Proxy configuration.** The starter's Vite proxy targeted `http://backend:5001` (only resolvable inside the compose network) while `VITE_API_URL` had the browser call Flask directly and rely on CORS. Standardized on same-origin `/api` requests through the dev-server proxy with a configurable `BACKEND_URL` target, so local dev and the devcontainer share one code path.
+- **Python 3.13 compatibility.** SQLAlchemy 2.0.23 fails to import on Python 3.13 and pandas 2.1.4 has no 3.13 wheels; both bumped. The devcontainer (3.12) was unaffected.
+- **Starter contained a file named `NUL`** in `backend/`, which is a reserved device name on Windows and breaks `git add`; removed before the baseline commit.
+- **Pagination is offset-based** for simplicity at this scale; I'd switch to cursor-based pagination before the pitch table grows meaningfully.
+- **Fun data note:** the dataset is 2025 postseason only — so `/api/players?team=HOU` comes back empty. Condolences to the reviewers.
+
+### With more time
+
+- Sortable table columns and CSV export of filtered results
+- Strike-zone plot from `plate_x`/`plate_z` and whiff/chase rates by zone in the arsenal view
+- Re-ingest with typed columns + indexes; cursor pagination
+- Structured JSON logging with request IDs; error tracking
+- Terraform-managed deploy to AWS (ECS Fargate behind an ALB; RDS Postgres replacing SQLite) — build once in CI, promote the same image through environments.
 
 ## Database
 
@@ -235,7 +288,7 @@ The pitches model and schema only include a subset of all the fields from the pi
 
 **Schemas:** Marshmallow schemas for both tables are already implemented in `backend/app/schemas.py`.
 
-**Models:** SqlAlchemy models are created in `backend/app/main.py`.
+**Models:** SqlAlchemy models are defined in `backend/app/models.py`.
 
 ## Frontend
 
