@@ -223,7 +223,8 @@ npm test # if using the dev container this will be 'bun test' instead
 ### With more time
 
 - Sortable table columns and CSV export of filtered results
-- Strike-zone plot from `plate_x`/`plate_z` and whiff/chase rates by zone in the arsenal view
+- SVG strike-zone overlay plotting pitch locations from `plate_x`/`plate_z`, filterable by pitch type and count. For hitters, a heat map over the zone: green where they do the most damage, red for their cold zones (e.g. up-and-in on fastballs), built from `launch_speed`/`events` by zone. This is the view I'd want as a player, and probably the feature I was most tempted to build anyway
+- Whiff/chase rates by zone in the arsenal view
 - Re-ingest with typed columns + indexes; cursor pagination
 - Structured JSON logging with request IDs; error tracking
 - Terraform-managed deploy to AWS (ECS Fargate behind an ALB; RDS Postgres replacing SQLite) — build once in CI, promote the same image through environments.
