@@ -1,7 +1,7 @@
 # Schemas for data validation and serialization are defined in this file.
 # The player and pitch schemas are implemented for you already but feel free to add more fields or schemas as needed.
 
-from marshmallow import Schema, fields, validate
+from marshmallow import EXCLUDE, Schema, fields, validate
 
 class PlayerSchema(Schema):
     """Schema for player data validation and serialization."""
@@ -69,3 +69,20 @@ class PitchSchema(Schema):
     # Teams
     home_team = fields.String(allow_none=True)
     away_team = fields.String(allow_none=True)
+
+
+# ---------------------------------------------------------------------------
+# Query-string validation schemas (invalid params -> 400, not a silent scan)
+# ---------------------------------------------------------------------------
+
+class PlayerQuerySchema(Schema):
+    """Validates /api/players query parameters."""
+
+    class Meta:
+        unknown = EXCLUDE
+
+    team = fields.String(validate=validate.Length(min=2, max=3))
+    position = fields.String(validate=validate.Length(min=1, max=5))
+    search = fields.String(validate=validate.Length(min=1, max=100))
+    page = fields.Integer(load_default=1, validate=validate.Range(min=1))
+    per_page = fields.Integer(load_default=50, validate=validate.Range(min=1, max=500))
