@@ -21,7 +21,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://localhost:5001/
+      # Vite dev-server proxy target: the backend service via Docker DNS.
+      # (Replaces VITE_API_URL, which made the browser call the backend
+      # directly and bypass the /api proxy, relying on CORS.)
+      - BACKEND_URL=http://backend:5001
     volumes:
       # 1. Mount entire monorepo for editing
       - .:/workspace:cached
