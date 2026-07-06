@@ -3,6 +3,32 @@
 
 from marshmallow import EXCLUDE, Schema, fields, validate
 
+
+class CoercedFloat(fields.Field):
+    """Serialize a TEXT column to a float, treating ''/None/garbage as null.
+
+    The pitches table was ingested from CSV and stores numeric data as TEXT;
+    coercing at the serialization boundary means the API emits real JSON
+    numbers and the frontend never has to parse strings.
+    """
+
+    def _serialize(self, value, attr, obj, **kwargs):
+        try:
+            return float(value) if value not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
+
+class CoercedInt(fields.Field):
+    """Serialize a TEXT column to an int, treating ''/None/garbage as null."""
+
+    def _serialize(self, value, attr, obj, **kwargs):
+        try:
+            return int(float(value)) if value not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
+
 class PlayerSchema(Schema):
     """Schema for player data validation and serialization."""
 
@@ -27,23 +53,26 @@ class PitchSchema(Schema):
     """Schema for pitch data validation and serialization."""
 
     # Pitch identification
+    rowid = fields.Integer()
     pitch_type = fields.String(allow_none=True)
+    pitch_name = fields.String(allow_none=True)
     game_date = fields.String(required=True)
 
-    # Pitcher and batter
+    # Pitcher and batter. player_name is the pitcher, "Last, First" format.
+    player_name = fields.String(allow_none=True)
     pitcher = fields.Integer(required=True)
     batter = fields.Integer(required=True)
 
-    # Pitch characteristics
-    release_speed = fields.String(allow_none=True)
-    release_spin_rate = fields.String(allow_none=True)
-    release_pos_x = fields.String(allow_none=True)
-    release_pos_z = fields.String(allow_none=True)
+    # Pitch characteristics (TEXT in the DB; coerced to numbers on the way out)
+    release_speed = CoercedFloat(allow_none=True)
+    release_spin_rate = CoercedFloat(allow_none=True)
+    release_pos_x = CoercedFloat(allow_none=True)
+    release_pos_z = CoercedFloat(allow_none=True)
 
     # Pitch location
-    plate_x = fields.Float(allow_none=True)
-    plate_z = fields.Float(allow_none=True)
-    zone = fields.Integer(allow_none=True)
+    plate_x = CoercedFloat(allow_none=True)
+    plate_z = CoercedFloat(allow_none=True)
+    zone = CoercedInt(allow_none=True)
 
     # Pitch result
     type = fields.String(allow_none=True)  # S, B, X
@@ -51,16 +80,16 @@ class PitchSchema(Schema):
     events = fields.String(allow_none=True)
 
     # Count and game situation
-    balls = fields.Integer(allow_none=True)
-    strikes = fields.Integer(allow_none=True)
-    outs_when_up = fields.Integer(allow_none=True)
-    inning = fields.Integer(allow_none=True)
+    balls = CoercedInt(allow_none=True)
+    strikes = CoercedInt(allow_none=True)
+    outs_when_up = CoercedInt(allow_none=True)
+    inning = CoercedInt(allow_none=True)
     inning_topbot = fields.String(allow_none=True)
 
     # Batted ball data
-    launch_speed = fields.String(allow_none=True)
-    launch_angle = fields.String(allow_none=True)
-    hit_distance_sc = fields.String(allow_none=True)
+    launch_speed = CoercedFloat(allow_none=True)
+    launch_angle = CoercedFloat(allow_none=True)
+    hit_distance_sc = CoercedFloat(allow_none=True)
 
     # Player handedness
     stand = fields.String(allow_none=True)  # L or R
@@ -84,5 +113,24 @@ class PlayerQuerySchema(Schema):
     team = fields.String(validate=validate.Length(min=2, max=3))
     position = fields.String(validate=validate.Length(min=1, max=5))
     search = fields.String(validate=validate.Length(min=1, max=100))
+    page = fields.Integer(load_default=1, validate=validate.Range(min=1))
+    per_page = fields.Integer(load_default=50, validate=validate.Range(min=1, max=500))
+
+
+class PitchQuerySchema(Schema):
+    """Validates /api/pitches query parameters."""
+
+    class Meta:
+        unknown = EXCLUDE
+
+    pitcher = fields.Integer()
+    batter = fields.Integer()
+    player_id = fields.Integer()  # matches pitches thrown OR seen by the player
+    pitch_type = fields.String(validate=validate.Length(min=1, max=3))
+    team = fields.String(validate=validate.Length(min=2, max=3))
+    min_velocity = fields.Float(validate=validate.Range(min=0, max=110))
+    max_velocity = fields.Float(validate=validate.Range(min=0, max=110))
+    start_date = fields.Date()
+    end_date = fields.Date()
     page = fields.Integer(load_default=1, validate=validate.Range(min=1))
     per_page = fields.Integer(load_default=50, validate=validate.Range(min=1, max=500))

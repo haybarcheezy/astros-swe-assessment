@@ -37,9 +37,11 @@ class Pitch(db.Model):
 
     # Pitch identification
     pitch_type = db.Column(db.String, nullable=True)
+    pitch_name = db.Column(db.String, nullable=True)
     game_date = db.Column(db.String, nullable=False)
 
-    # Pitcher and hitter
+    # Pitcher and hitter. player_name is the pitcher in "Last, First" format.
+    player_name = db.Column(db.String, nullable=True)
     pitcher = db.Column(db.Integer, nullable=False)
     batter = db.Column(db.Integer, nullable=False)
 
