@@ -1,20 +1,14 @@
 import pytest
-import os
-import sys
 
-from main import app, db, Player, Pitch
+from app import create_app
 
 
 @pytest.fixture
 def client():
     """Create a test client for the Flask application."""
 
-    # Point to the actual baseball database for now
-    app.config["TESTING"] = True
-    baseball_db_path = os.path.join(
-        os.path.dirname(__file__), "..", "data", "baseball.db"
-    )
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{baseball_db_path}"
+    # Points at the shipped baseball.db for now; will move to seeded
+    app = create_app({"TESTING": True})
 
     with app.test_client() as client:
         with app.app_context():
