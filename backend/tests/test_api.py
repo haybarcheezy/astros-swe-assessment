@@ -149,3 +149,34 @@ class TestPitchAPI:
         assert resp.status_code == 200
         codes = [t["code"] for t in resp.get_json()]
         assert codes == ["CU", "FF", "SI"]
+
+
+class TestArsenalAPI:
+    """Test the pitcher arsenal summary endpoint."""
+
+    def test_arsenal_aggregates_by_pitch_type(self, client):
+        resp = client.get("/api/players/2/arsenal")
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["player"]["last_name"] == "Valdez"
+        assert body["total_pitches"] == 4
+
+        by_type = {a["pitch_type"]: a for a in body["arsenal"]}
+        assert by_type["SI"]["count"] == 2
+        assert by_type["SI"]["usage_pct"] == 50.0
+        assert by_type["SI"]["avg_velocity"] == 94.7
+        assert by_type["SI"]["max_velocity"] == 95.3
+        assert by_type["CU"]["avg_spin_rate"] == 2800
+
+    def test_arsenal_sorted_by_usage(self, client):
+        body = client.get("/api/players/2/arsenal").get_json()
+        counts = [a["count"] for a in body["arsenal"]]
+        assert counts == sorted(counts, reverse=True)
+
+    def test_arsenal_for_nonexistent_player_returns_404(self, client):
+        assert client.get("/api/players/999/arsenal").status_code == 404
+
+    def test_arsenal_for_position_player_is_empty(self, client):
+        body = client.get("/api/players/3/arsenal").get_json()
+        assert body["total_pitches"] == 0
+        assert body["arsenal"] == []

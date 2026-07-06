@@ -1,10 +1,10 @@
-"""Player endpoints: listing/filtering, detail, and reference data."""
+"""Player endpoints: listing/filtering, detail, reference data, and arsenal."""
 
 from flask import Blueprint, jsonify, request
-from sqlalchemy import or_
+from sqlalchemy import Float, cast, func, or_
 
 from app.extensions import db
-from app.models import Player
+from app.models import Pitch, Player
 from app.routes import load_query_params, paginate
 from app.schemas import PlayerQuerySchema, PlayerSchema
 
@@ -70,3 +70,63 @@ def get_positions():
         .order_by(Player.primary_position)
     ]
     return jsonify(positions), 200
+
+
+@players_bp.route("/players/<int:player_id>/arsenal", methods=["GET"])
+def get_player_arsenal(player_id: int):
+    """Pitch-arsenal summary for a pitcher: usage and velo/spin by pitch type.
+
+    Numeric pitch columns are stored as TEXT in the SQLite DB, so aggregates
+    CAST to REAL explicitly — otherwise SQLite would compare/aggregate
+    lexicographically and produce silently wrong numbers.
+    """
+    player = db.session.get(Player, player_id)
+    if player is None:
+        return jsonify({"error": f"Player {player_id} not found"}), 404
+
+    speed = cast(Pitch.release_speed, Float)
+    spin = cast(Pitch.release_spin_rate, Float)
+
+    rows = (
+        db.session.query(
+            Pitch.pitch_type,
+            Pitch.pitch_name,
+            func.count().label("count"),
+            func.round(func.avg(speed), 1).label("avg_velocity"),
+            func.round(func.max(speed), 1).label("max_velocity"),
+            func.round(func.avg(spin), 0).label("avg_spin_rate"),
+        )
+        .filter(
+            Pitch.pitcher == player_id,
+            Pitch.pitch_type.isnot(None),
+            Pitch.pitch_type != "",
+        )
+        .group_by(Pitch.pitch_type, Pitch.pitch_name)
+        .order_by(func.count().desc())
+        .all()
+    )
+
+    total = sum(r.count for r in rows)
+    arsenal = [
+        {
+            "pitch_type": r.pitch_type,
+            "pitch_name": r.pitch_name,
+            "count": r.count,
+            "usage_pct": round(100.0 * r.count / total, 1) if total else 0.0,
+            "avg_velocity": r.avg_velocity,
+            "max_velocity": r.max_velocity,
+            "avg_spin_rate": r.avg_spin_rate,
+        }
+        for r in rows
+    ]
+
+    return (
+        jsonify(
+            {
+                "player": player_schema.dump(player),
+                "total_pitches": total,
+                "arsenal": arsenal,
+            }
+        ),
+        200,
+    )
