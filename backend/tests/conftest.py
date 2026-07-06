@@ -9,7 +9,7 @@ import pytest
 
 from app import create_app
 from app.extensions import db
-from app.models import Player
+from app.models import Pitch, Player
 
 PLAYERS = [
     dict(
@@ -59,6 +59,90 @@ PLAYERS = [
     ),
 ]
 
+# Numeric pitch values are seeded as strings on purpose — that mirrors the
+# real database, where every pitch column is TEXT from the raw CSV ingest.
+PITCHES = [
+    # Valdez sinkers + a curveball to Ohtani
+    dict(
+        game_date="2025-10-01",
+        pitch_type="SI",
+        pitch_name="Sinker",
+        player_name="Valdez, Framber",
+        pitcher=2,
+        batter=3,
+        release_speed="94.1",
+        release_spin_rate="2100",
+        type="S",
+        description="called_strike",
+        balls="0",
+        strikes="0",
+        inning="1",
+        home_team="HOU",
+        away_team="LAD",
+        stand="L",
+        p_throws="L",
+    ),
+    dict(
+        game_date="2025-10-01",
+        pitch_type="SI",
+        pitch_name="Sinker",
+        player_name="Valdez, Framber",
+        pitcher=2,
+        batter=3,
+        release_speed="95.3",
+        release_spin_rate="2150",
+        type="B",
+        description="ball",
+        balls="0",
+        strikes="1",
+        inning="1",
+        home_team="HOU",
+        away_team="LAD",
+        stand="L",
+        p_throws="L",
+    ),
+    dict(
+        game_date="2025-10-02",
+        pitch_type="CU",
+        pitch_name="Curveball",
+        player_name="Valdez, Framber",
+        pitcher=2,
+        batter=3,
+        release_speed="79.8",
+        release_spin_rate="2800",
+        type="X",
+        description="hit_into_play",
+        events="single",
+        balls="1",
+        strikes="1",
+        inning="3",
+        home_team="LAD",
+        away_team="HOU",
+        stand="L",
+        p_throws="L",
+    ),
+    # A pitch with no recorded velocity (mirrors real data gaps)
+    dict(
+        game_date="2025-10-03",
+        pitch_type="FF",
+        pitch_name="4-Seam Fastball",
+        player_name="Valdez, Framber",
+        pitcher=2,
+        batter=1,
+        release_speed="",
+        release_spin_rate="",
+        type="B",
+        description="ball",
+        balls="0",
+        strikes="0",
+        inning="5",
+        home_team="HOU",
+        away_team="LAD",
+        stand="R",
+        p_throws="L",
+    ),
+]
+
 
 @pytest.fixture
 def app():
@@ -72,6 +156,7 @@ def app():
     with app.app_context():
         db.create_all()
         db.session.add_all([Player(**p) for p in PLAYERS])
+        db.session.add_all([Pitch(**p) for p in PITCHES])
         db.session.commit()
         yield app
         db.session.remove()

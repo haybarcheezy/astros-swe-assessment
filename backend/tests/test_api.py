@@ -80,3 +80,72 @@ class TestPlayerAPI:
         resp = client.get("/api/players/positions")
         assert resp.status_code == 200
         assert resp.get_json() == ["2B", "DH", "LHS"]
+
+
+class TestPitchAPI:
+    """Test pitch-related API endpoints."""
+
+    def test_get_all_pitches(self, client):
+        resp = client.get("/api/pitches")
+        assert resp.status_code == 200
+        assert resp.get_json()["pagination"]["total"] == 4
+
+    def test_numeric_fields_are_serialized_as_numbers(self, client):
+        """The DB stores numerics as TEXT; API must return real JSON numbers."""
+        body = client.get("/api/pitches?pitcher=2&pitch_type=SI").get_json()
+        pitch = body["data"][0]
+        assert isinstance(pitch["release_speed"], float)
+        assert isinstance(pitch["balls"], int)
+
+    def test_blank_velocity_serialized_as_null(self, client):
+        body = client.get("/api/pitches?batter=1").get_json()
+        assert body["data"][0]["release_speed"] is None
+
+    def test_filter_pitches_thrown_by_player(self, client):
+        body = client.get("/api/pitches?pitcher=2").get_json()
+        assert body["pagination"]["total"] == 4
+
+    def test_filter_pitches_seen_by_player(self, client):
+        body = client.get("/api/pitches?batter=3").get_json()
+        assert body["pagination"]["total"] == 3
+
+    def test_filter_pitches_thrown_or_seen(self, client):
+        body = client.get("/api/pitches?player_id=1").get_json()
+        assert body["pagination"]["total"] == 1  # Altuve only saw one pitch
+
+    def test_filter_by_pitch_type(self, client):
+        body = client.get("/api/pitches?pitch_type=CU").get_json()
+        assert body["pagination"]["total"] == 1
+        assert body["data"][0]["pitch_type"] == "CU"
+
+    def test_filter_by_min_velocity_casts_text_column(self, client):
+        """95+ mph filter must CAST the TEXT column — the assessment's own
+        example question ('what pitches were thrown at 95 mph or greater?')."""
+        body = client.get("/api/pitches?min_velocity=95").get_json()
+        assert body["pagination"]["total"] == 1
+        assert body["data"][0]["release_speed"] == 95.3
+
+    def test_filter_by_velocity_range(self, client):
+        body = client.get("/api/pitches?min_velocity=79&max_velocity=95").get_json()
+        assert body["pagination"]["total"] == 2
+
+    def test_filter_by_date_range(self, client):
+        body = client.get(
+            "/api/pitches?start_date=2025-10-02&end_date=2025-10-02"
+        ).get_json()
+        assert body["pagination"]["total"] == 1
+        assert body["data"][0]["game_date"] == "2025-10-02"
+
+    def test_filter_by_team(self, client):
+        body = client.get("/api/pitches?team=LAD").get_json()
+        assert body["pagination"]["total"] == 4  # all seed games involve LAD
+
+    def test_invalid_velocity_returns_400(self, client):
+        resp = client.get("/api/pitches?min_velocity=not-a-number")
+        assert resp.status_code == 400
+
+    def test_get_pitch_types(self, client):
+        resp = client.get("/api/pitches/types")
+        assert resp.status_code == 200
+        codes = [t["code"] for t in resp.get_json()]
+        assert codes == ["CU", "FF", "SI"]
