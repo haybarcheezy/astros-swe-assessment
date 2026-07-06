@@ -1,5 +1,6 @@
 import axios from "axios";
 import {
+  ArsenalResponse,
   Paginated,
   Pitch,
   PitchFilterOptions,
@@ -46,6 +47,13 @@ export class ApiService {
 
   static async getPositions(): Promise<string[]> {
     const { data } = await api.get<string[]>("/players/positions");
+    return data;
+  }
+
+  static async getArsenal(playerId: number): Promise<ArsenalResponse> {
+    const { data } = await api.get<ArsenalResponse>(
+      `/players/${playerId}/arsenal`
+    );
     return data;
   }
 

@@ -84,3 +84,19 @@ export interface PitchType {
   code: string;
   name: string;
 }
+
+export interface ArsenalEntry {
+  pitch_type: string;
+  pitch_name: string | null;
+  count: number;
+  usage_pct: number;
+  avg_velocity: number | null;
+  max_velocity: number | null;
+  avg_spin_rate: number | null;
+}
+
+export interface ArsenalResponse {
+  player: Player;
+  total_pitches: number;
+  arsenal: ArsenalEntry[];
+}
